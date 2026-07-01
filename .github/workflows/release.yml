@@ -1,0 +1,85 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  build-ubuntu:
+    runs-on: ubuntu-latest
+    container:
+      image: ubuntu:24.04
+    steps:
+      - name: Install dependencies
+        run: |
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update
+          apt-get install -y build-essential cmake libglfw3-dev libssl-dev git
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Build and Package
+        run: |
+          mkdir build && cd build
+          cmake ..
+          make -j$(nproc)
+          cpack -G DEB
+          cpack -G TGZ
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ubuntu-artifacts
+          path: |
+            build/*.deb
+            build/*.tar.gz
+          
+  build-centos:
+    runs-on: ubuntu-latest
+    container:
+      image: quay.io/centos/centos:stream9
+    steps:
+      - name: Install dependencies
+        run: |
+          dnf install -y epel-release
+          dnf groupinstall -y "Development Tools"
+          dnf install -y gcc-c++ cmake glfw-devel openssl-devel rpm-build git
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Build and Package
+        run: |
+          mkdir build && cd build
+          cmake ..
+          make -j$(nproc)
+          cpack -G RPM
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: centos-artifacts
+          path: build/*.rpm
+
+  release:
+    needs: [build-ubuntu, build-centos]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download Ubuntu Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: ubuntu-artifacts
+          path: artifacts/
+      - name: Download CentOS Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: centos-artifacts
+          path: artifacts/
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -28,11 +28,11 @@
   - Create `.zed/settings.json` configuring `clangd` for auto-formatting and C++ language server support.
 
 ### Milestone 2: CI/CD & Build Infrastructure
-- [ ] **Docker Environments**: 
+- [x] **Docker Environments**: 
   - `docker/ubuntu2404.Dockerfile`: Base Ubuntu 24.04 image with `build-essential`, `cmake`, `libglfw3-dev`, `libssl-dev`.
   - `docker/centos9.Dockerfile`: Base CentOS Stream 9 image with `gcc-c++`, `cmake`, `glfw-devel`, `openssl-devel`, `rpm-build`.
-- [ ] **CMake Configuration**: Configure `CMakeLists.txt` to compile ImGui, link the header-only libraries, link OpenSSL, and use `CPack` to define `.deb` and `.rpm` packaging metadata.
-- [ ] **GitHub Actions Workflow**: Create `.github/workflows/release.yml`. Trigger on `tags: ['v*.*.*']`. Spin up the Docker containers, compile the binary, run CPack, and upload the resulting `.deb`, `.rpm`, and raw standalone binary to the GitHub Release.
+- [x] **CMake Configuration**: Configure `CMakeLists.txt` to compile ImGui, link the header-only libraries, link OpenSSL, and use `CPack` to define `.deb` and `.rpm` packaging metadata.
+- [x] **GitHub Actions Workflow**: Create `.github/workflows/release.yml`. Trigger on `tags: ['v*.*.*']`. Spin up the Docker containers, compile the binary, run CPack, and upload the resulting `.deb`, `.rpm`, and raw standalone binary to the GitHub Release.
 
 ### Milestone 3: Core Backend & Auth
 - [ ] **Multi-Account OAuth Loop**: 
