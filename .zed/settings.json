@@ -1,0 +1,18 @@
+{
+    "languages": {
+        "C++": {
+            "language_servers": ["clangd"],
+            "format_on_save": "on"
+        }
+    },
+    "lsp": {
+        "clangd": {
+            "binary": {
+                "path": "clangd"
+            },
+            "initialization_options": {
+                "fallbackFlags": ["-std=c++17"]
+            }
+        }
+    }
+}
