@@ -27,7 +27,10 @@ target_include_directories(imgui PUBLIC
 target_compile_definitions(imgui PUBLIC IMGUI_IMPL_OPENGL_LOADER_GL3W)
 
 # Main Executable
-add_executable(google-tasks-imgui src/main.cpp)
+add_executable(google-tasks-imgui 
+    src/main.cpp
+    src/auth.cpp
+)
 
 # Include directories
 target_include_directories(google-tasks-imgui PRIVATE

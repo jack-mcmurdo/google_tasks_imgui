@@ -35,7 +35,7 @@
 - [x] **GitHub Actions Workflow**: Create `.github/workflows/release.yml`. Trigger on `tags: ['v*.*.*']`. Spin up the Docker containers, compile the binary, run CPack, and upload the resulting `.deb`, `.rpm`, and raw standalone binary to the GitHub Release.
 
 ### Milestone 3: Core Backend & Auth
-- [ ] **Multi-Account OAuth Loop**: 
+- [x] **Multi-Account OAuth Loop**: 
   - Use system commands (`xdg-open` / `open`) to launch the Google Login URL.
   - Run `httplib::Server` on port 8080 (on a separate thread) to catch the redirect code.
   - Exchange the code for tokens via `httplib::Client`.
