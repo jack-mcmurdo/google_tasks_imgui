@@ -42,7 +42,7 @@
   - Implement a token manager that can store, retrieve, and swap tokens for multiple Google accounts.
 
 ### Milestone 4: Google Tasks API Integration
-- [ ] **API Client Class**: Implement wrappers around `cpp-httplib` to parse JSON from:
+- [x] **API Client Class**: Implement wrappers around `cpp-httplib` to parse JSON from:
   - Fetching Task Lists
   - Fetching, Creating, Updating, and Deleting Tasks (Full CRUD)
   - Moving tasks (to support reordering / subtask assignment via the `parent` and `previous` API parameters).

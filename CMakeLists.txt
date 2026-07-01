@@ -30,6 +30,7 @@ target_compile_definitions(imgui PUBLIC IMGUI_IMPL_OPENGL_LOADER_GL3W)
 add_executable(google-tasks-imgui 
     src/main.cpp
     src/auth.cpp
+    src/api.cpp
 )
 
 # Include directories
