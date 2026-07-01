@@ -8,6 +8,7 @@
 #include <thread>
 #include <mutex>
 #include <chrono>
+#include <atomic>
 
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
@@ -16,15 +17,16 @@
 
 #include "api.h"
 #include "auth.h"
+#include "IconsFontAwesome5.h"
 
 // --- Application State ---
-static char edit_buffer[256] = "";
-static std::string editing_task_id = "";
+static std::string selected_task_id = "";
+static bool focus_title_input = false;
 
 struct AppState {
     Auth::TokenManager token_manager{"tokens.json"};
     std::string current_account_id;
-    std::unique_ptr<API::GoogleTasksAPI> api;
+    std::shared_ptr<API::GoogleTasksAPI> api;
     
     std::vector<API::TaskList> lists;
     std::string selected_list_id;
@@ -34,7 +36,7 @@ struct AppState {
     bool oauth_in_progress = false;
     std::string oauth_error;
     
-    bool needs_refresh = false;
+    std::atomic<bool> needs_refresh{false};
 };
 
 // --- Desktop Notifications ---
@@ -103,7 +105,7 @@ void RenderSidebar(AppState& state) {
     for (auto& acc : accounts) {
         if (ImGui::Selectable(acc.email.c_str(), state.current_account_id == acc.id)) {
             state.current_account_id = acc.id;
-            state.api = std::make_unique<API::GoogleTasksAPI>(acc.access_token);
+            state.api = std::make_shared<API::GoogleTasksAPI>(acc.access_token);
             state.lists = state.api->get_tasklists();
             state.selected_list_id = "";
             state.tasks.clear();
@@ -114,19 +116,75 @@ void RenderSidebar(AppState& state) {
     
     if (state.api) {
         ImGui::Text("Lists");
-        for (const auto& list : state.lists) {
-            if (ImGui::Selectable(list.title.c_str(), state.selected_list_id == list.id)) {
+        ImGui::SameLine();
+        if (ImGui::Button("+##AddList")) {
+            ImGui::OpenPopup("AddListPopup");
+        }
+        
+        if (ImGui::BeginPopup("AddListPopup")) {
+            static char new_list_name[128] = "";
+            ImGui::InputText("Name", new_list_name, sizeof(new_list_name));
+            if (ImGui::Button("Create")) {
+                auto created = state.api->create_tasklist(new_list_name);
+                if (created) {
+                    state.lists = state.api->get_tasklists();
+                    new_list_name[0] = '\0';
+                    ImGui::CloseCurrentPopup();
+                }
+            }
+            ImGui::EndPopup();
+        }
+
+        for (auto it = state.lists.begin(); it != state.lists.end(); ) {
+            const auto& list = *it;
+            bool selected = (state.selected_list_id == list.id);
+            if (ImGui::Selectable((list.title + "##" + list.id).c_str(), selected)) {
                 state.selected_list_id = list.id;
                 state.needs_refresh = true;
             }
+            
+            if (ImGui::BeginPopupContextItem()) {
+                if (ImGui::Selectable("Delete List")) {
+                    if (state.api->delete_tasklist(list.id)) {
+                        state.lists = state.api->get_tasklists();
+                        if (state.selected_list_id == list.id) {
+                            state.selected_list_id = "";
+                            state.tasks.clear();
+                        }
+                        ImGui::EndPopup();
+                        break; // exit loop to avoid invalid iterator
+                    }
+                }
+                ImGui::EndPopup();
+            }
+            ++it;
         }
     }
 
     ImGui::EndChild();
 }
 
+void AsyncUpdateTask(AppState& state, const API::Task& task) {
+    std::thread([api = state.api, list_id = state.selected_list_id, task_copy = task]() {
+        if (api) api->update_task(list_id, task_copy);
+    }).detach();
+}
+
+void AsyncDeleteTask(AppState& state, API::Task* task) {
+    if (!task) return;
+    task->deleted = true;
+    if (selected_task_id == task->id) selected_task_id = "";
+
+    std::thread([api = state.api, list_id = state.selected_list_id, task_id = task->id, &state]() {
+        if (api && api->delete_task(list_id, task_id)) {
+            state.needs_refresh = true;
+        }
+    }).detach();
+}
+
 void RenderTasks(AppState& state) {
-    ImGui::BeginChild("Tasks", ImVec2(0, 0), true);
+    // Leave 300 pixels for right panel
+    ImGui::BeginChild("Tasks", ImVec2(ImGui::GetContentRegionAvail().x - 300, 0), true);
     
     if (!state.selected_list_id.empty()) {
         if (ImGui::Button("Refresh")) {
@@ -139,6 +197,8 @@ void RenderTasks(AppState& state) {
             auto created = state.api->create_task(state.selected_list_id, new_task);
             if (created) {
                 state.needs_refresh = true;
+                selected_task_id = created->id;
+                focus_title_input = true;
             }
         }
         ImGui::Separator();
@@ -147,6 +207,7 @@ void RenderTasks(AppState& state) {
         std::vector<API::Task*> root_tasks;
         
         for (auto& task : state.tasks) {
+            if (task.deleted) continue;
             if (task.parent.empty()) {
                 root_tasks.push_back(&task);
             } else {
@@ -162,34 +223,8 @@ void RenderTasks(AppState& state) {
                 flags |= ImGuiTreeNodeFlags_Leaf;
             }
             
-            bool is_open = ImGui::TreeNodeEx("##node", flags);
-            ImGui::SameLine();
-            
-            bool completed = (task->status == "completed");
-            if (ImGui::Checkbox("##completed", &completed)) {
-                task->status = completed ? "completed" : "needsAction";
-                state.api->update_task(state.selected_list_id, *task);
-            }
-            ImGui::SameLine();
-            
-            if (editing_task_id == task->id) {
-                ImGui::SetNextItemWidth(300);
-                if (ImGui::InputText("##edit", edit_buffer, sizeof(edit_buffer), ImGuiInputTextFlags_EnterReturnsTrue)) {
-                    task->title = edit_buffer;
-                    state.api->update_task(state.selected_list_id, *task);
-                    editing_task_id = "";
-                }
-                ImGui::SameLine();
-                if (ImGui::Button("Cancel")) {
-                    editing_task_id = "";
-                }
-            } else {
-                ImGui::Text("%s", task->title.c_str());
-                if (ImGui::IsItemClicked()) {
-                    editing_task_id = task->id;
-                    strncpy(edit_buffer, task->title.c_str(), sizeof(edit_buffer) - 1);
-                }
-            }
+            ImGui::AlignTextToFramePadding();
+            bool is_open = ImGui::TreeNodeEx("##node", flags | ImGuiTreeNodeFlags_SpanFullWidth | ImGuiTreeNodeFlags_AllowOverlap);
             
             if (ImGui::BeginDragDropSource()) {
                 ImGui::SetDragDropPayload("TASK_ID", task->id.c_str(), task->id.size() + 1);
@@ -207,6 +242,77 @@ void RenderTasks(AppState& state) {
                 }
                 ImGui::EndDragDropTarget();
             }
+            
+            if (ImGui::BeginPopupContextItem()) {
+                if (ImGui::Selectable("Add Subtask")) {
+                    API::Task subtask;
+                    subtask.title = "New Subtask";
+                    auto created = state.api->create_task(state.selected_list_id, subtask, task->id);
+                    if (created) {
+                        state.needs_refresh = true;
+                        selected_task_id = created->id;
+                        focus_title_input = true;
+                    }
+                }
+                if (ImGui::Selectable("Delete Task")) {
+                    AsyncDeleteTask(state, task);
+                }
+                ImGui::EndPopup();
+            }
+
+            ImGui::SameLine();
+            
+            bool completed = (task->status == "completed");
+            if (ImGui::Checkbox("##completed", &completed)) {
+                task->status = completed ? "completed" : "needsAction";
+                AsyncUpdateTask(state, *task);
+            }
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("Mark as %s", completed ? "needs action" : "completed");
+            }
+            ImGui::SameLine();
+            
+            bool is_starred = task->notes.find("[STARRED]") != std::string::npos;
+            if (is_starred) {
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.84f, 0.0f, 1.0f)); // Gold/Yellow
+            } else {
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.4f, 0.4f, 0.4f, 1.0f)); // Gray
+            }
+            if (ImGui::Button(ICON_FA_STAR "##star")) {
+                if (is_starred) {
+                    size_t pos = task->notes.find("[STARRED]");
+                    if (pos != std::string::npos) {
+                        task->notes.erase(pos, 9);
+                    }
+                } else {
+                    if (task->notes.empty()) task->notes = "[STARRED]";
+                    else task->notes += "\n[STARRED]";
+                }
+                AsyncUpdateTask(state, *task);
+            }
+            ImGui::PopStyleColor();
+            ImGui::SameLine();
+            
+            float trash_button_width = ImGui::CalcTextSize(ICON_FA_TRASH).x + ImGui::GetStyle().FramePadding.x * 2.0f;
+            float available_width = ImGui::GetContentRegionAvail().x;
+            
+            bool is_selected = (selected_task_id == task->id);
+            if (ImGui::Selectable(task->title.c_str(), is_selected, 0, ImVec2(available_width - trash_button_width - ImGui::GetStyle().ItemSpacing.x, 0))) {
+                selected_task_id = task->id;
+            }
+            
+            ImGui::SameLine();
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.8f, 0.3f, 0.3f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.3f, 0.3f, 0.3f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.4f, 0.4f, 0.4f, 0.4f));
+            if (ImGui::Button(ICON_FA_TRASH "##trash")) {
+                AsyncDeleteTask(state, task);
+            }
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("Delete Task");
+            }
+            ImGui::PopStyleColor(4);
             
             if (is_open) {
                 for (auto* child : children_map[task->id]) {
@@ -226,6 +332,94 @@ void RenderTasks(AppState& state) {
         ImGui::Text("Select a list to view tasks.");
     }
     
+    ImGui::EndChild();
+}
+
+#include "imgui_date_picker.h"
+
+void RenderRightPanel(AppState& state) {
+    ImGui::BeginChild("RightPanel", ImVec2(0, 0), true);
+    if (selected_task_id.empty()) {
+        ImGui::Text("Select a task to view details.");
+    } else {
+        API::Task* task = nullptr;
+        for (auto& t : state.tasks) {
+            if (t.id == selected_task_id) {
+                task = &t;
+                break;
+            }
+        }
+        
+        if (task) {
+            char title_buf[256];
+            strncpy(title_buf, task->title.c_str(), sizeof(title_buf) - 1);
+            title_buf[sizeof(title_buf) - 1] = '\0';
+            
+            if (focus_title_input) {
+                ImGui::SetKeyboardFocusHere();
+                focus_title_input = false;
+            }
+            if (ImGui::InputText("Title", title_buf, sizeof(title_buf), ImGuiInputTextFlags_EnterReturnsTrue) || ImGui::IsItemDeactivatedAfterEdit()) {
+                task->title = title_buf;
+                AsyncUpdateTask(state, *task);
+            }
+            
+            bool is_starred = task->notes.find("[STARRED]") != std::string::npos;
+            if (is_starred) {
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.84f, 0.0f, 1.0f));
+            } else {
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.4f, 0.4f, 0.4f, 1.0f));
+            }
+            if (ImGui::Button(ICON_FA_STAR " Starred##rp")) {
+                if (is_starred) {
+                    size_t pos = task->notes.find("[STARRED]");
+                    if (pos != std::string::npos) {
+                        task->notes.erase(pos, 9);
+                    }
+                } else {
+                    if (task->notes.empty()) task->notes = "[STARRED]";
+                    else task->notes += "\n[STARRED]";
+                }
+                AsyncUpdateTask(state, *task);
+            }
+            ImGui::PopStyleColor();
+            
+            std::string display_notes = task->notes;
+            size_t pos = display_notes.find("[STARRED]");
+            if (pos != std::string::npos) {
+                display_notes.erase(pos, 9);
+            }
+            
+            char notes_buf[1024];
+            strncpy(notes_buf, display_notes.c_str(), sizeof(notes_buf) - 1);
+            notes_buf[sizeof(notes_buf) - 1] = '\0';
+            if (ImGui::InputTextMultiline("Notes", notes_buf, sizeof(notes_buf), ImVec2(-FLT_MIN, ImGui::GetTextLineHeight() * 8)) || ImGui::IsItemDeactivatedAfterEdit()) {
+                std::string new_notes = notes_buf;
+                if (is_starred) {
+                    if (!new_notes.empty()) new_notes += "\n[STARRED]";
+                    else new_notes = "[STARRED]";
+                }
+                task->notes = new_notes;
+                AsyncUpdateTask(state, *task);
+            }
+            
+            std::string due_date = task->due;
+            std::string short_due = due_date.length() >= 10 ? due_date.substr(0, 10) : "";
+            if (ImGui::DatePicker("Due Date", short_due)) {
+                task->due = short_due + "T00:00:00.000Z";
+                AsyncUpdateTask(state, *task);
+            }
+            
+            ImGui::Separator();
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.2f, 0.2f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.9f, 0.3f, 0.3f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(1.0f, 0.4f, 0.4f, 1.0f));
+            if (ImGui::Button(ICON_FA_TRASH " Delete Task", ImVec2(-FLT_MIN, 0))) {
+                AsyncDeleteTask(state, task);
+            }
+            ImGui::PopStyleColor(3);
+        }
+    }
     ImGui::EndChild();
 }
 
@@ -253,6 +447,48 @@ int main(int argc, char** argv) {
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
     
     ImGui::StyleColorsDark();
+    ImGuiStyle& style = ImGui::GetStyle();
+    style.Colors[ImGuiCol_Text] = ImVec4(0.90f, 0.90f, 0.90f, 1.00f);
+    style.Colors[ImGuiCol_WindowBg] = ImVec4(0.12f, 0.12f, 0.14f, 1.00f);
+    style.Colors[ImGuiCol_Header] = ImVec4(0.38f, 0.33f, 0.47f, 1.00f);
+    style.Colors[ImGuiCol_HeaderHovered] = ImVec4(0.48f, 0.43f, 0.57f, 1.00f);
+    style.Colors[ImGuiCol_HeaderActive] = ImVec4(0.58f, 0.53f, 0.67f, 1.00f);
+    style.Colors[ImGuiCol_Button] = ImVec4(0.38f, 0.33f, 0.47f, 1.00f);
+    style.Colors[ImGuiCol_ButtonHovered] = ImVec4(0.48f, 0.43f, 0.57f, 1.00f);
+    style.Colors[ImGuiCol_ButtonActive] = ImVec4(0.58f, 0.53f, 0.67f, 1.00f);
+    style.Colors[ImGuiCol_CheckMark] = ImVec4(0.80f, 0.75f, 0.95f, 1.00f);
+    style.Colors[ImGuiCol_FrameBg] = ImVec4(0.20f, 0.20f, 0.22f, 1.00f);
+    style.Colors[ImGuiCol_FrameBgHovered] = ImVec4(0.25f, 0.25f, 0.27f, 1.00f);
+    style.Colors[ImGuiCol_FrameBgActive] = ImVec4(0.30f, 0.30f, 0.32f, 1.00f);
+    
+
+    if (FILE* f = fopen("assets/fonts/PTSans-Regular.ttf", "r")) {
+        fclose(f);
+        io.Fonts->AddFontFromFileTTF("assets/fonts/PTSans-Regular.ttf", 18.0f);
+    } else if (FILE* f = fopen("../assets/fonts/PTSans-Regular.ttf", "r")) {
+        fclose(f);
+        io.Fonts->AddFontFromFileTTF("../assets/fonts/PTSans-Regular.ttf", 18.0f);
+    } else if (FILE* f = fopen("/usr/share/google-tasks-imgui/fonts/PTSans-Regular.ttf", "r")) {
+        fclose(f);
+        io.Fonts->AddFontFromFileTTF("/usr/share/google-tasks-imgui/fonts/PTSans-Regular.ttf", 18.0f);
+    }
+
+    ImFontConfig config;
+    config.MergeMode = true;
+    config.PixelSnapH = true;
+    config.GlyphMinAdvanceX = 16.0f;
+    static const ImWchar icon_ranges[] = { ICON_MIN_FA, ICON_MAX_16_FA, 0 };
+
+    if (FILE* f = fopen("assets/fonts/fa-solid-900.ttf", "r")) {
+        fclose(f);
+        io.Fonts->AddFontFromFileTTF("assets/fonts/fa-solid-900.ttf", 16.0f, &config, icon_ranges);
+    } else if (FILE* f = fopen("../assets/fonts/fa-solid-900.ttf", "r")) {
+        fclose(f);
+        io.Fonts->AddFontFromFileTTF("../assets/fonts/fa-solid-900.ttf", 16.0f, &config, icon_ranges);
+    } else if (FILE* f = fopen("/usr/share/google-tasks-imgui/fonts/fa-solid-900.ttf", "r")) {
+        fclose(f);
+        io.Fonts->AddFontFromFileTTF("/usr/share/google-tasks-imgui/fonts/fa-solid-900.ttf", 16.0f, &config, icon_ranges);
+    }
 
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 130");
@@ -262,6 +498,9 @@ int main(int argc, char** argv) {
     
     const char* client_id = std::getenv("GOOGLE_CLIENT_ID");
     const char* client_secret = std::getenv("GOOGLE_CLIENT_SECRET");
+    if (!client_id) client_id = "492917157691-lap1e9nte0gvq44t2712o9pmgvfvkofb.apps.googleusercontent.com";
+    if (!client_secret) client_secret = "REDACTED";
+    
     if (client_id && client_secret) {
         Auth::set_client_credentials(client_id, client_secret);
     }
@@ -290,6 +529,8 @@ int main(int argc, char** argv) {
         RenderSidebar(state);
         ImGui::SameLine();
         RenderTasks(state);
+        ImGui::SameLine();
+        RenderRightPanel(state);
         
         ImGui::End();
 

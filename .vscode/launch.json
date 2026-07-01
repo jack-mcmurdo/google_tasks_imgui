@@ -9,7 +9,16 @@
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
-            "environment": [],
+            "environment": [
+                {
+                    "name": "GOOGLE_CLIENT_ID",
+                    "value": "492917157691-lap1e9nte0gvq44t2712o9pmgvfvkofb.apps.googleusercontent.com"
+                },
+                {
+                    "name": "GOOGLE_CLIENT_SECRET",
+                    "value": "REDACTED"
+                }
+            ],
             "externalConsole": false,
             "MIMode": "gdb",
             "setupCommands": [

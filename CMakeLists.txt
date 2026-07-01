@@ -52,6 +52,7 @@ target_link_libraries(google-tasks-imgui PRIVATE
 
 # Installation
 install(TARGETS google-tasks-imgui DESTINATION bin)
+install(DIRECTORY assets/fonts DESTINATION share/google-tasks-imgui)
 
 # CPack configuration
 set(CPACK_PACKAGE_NAME "google-tasks-imgui")
