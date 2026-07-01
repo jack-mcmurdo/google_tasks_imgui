@@ -49,12 +49,12 @@
   - Updating "Starred" status (if mapped to a specific list/property) and Due Dates.
 
 ### Milestone 5: ImGui Frontend
-- [ ] **Main Layout**: Design a modern, clean interface with a collapsible left sidebar (for Accounts and Lists) and a main content pane (for Tasks).
-- [ ] **Task Interactions**:
+- [x] **Main Layout**: Design a modern, clean interface with a collapsible left sidebar (for Accounts and Lists) and a main content pane (for Tasks).
+- [x] **Task Interactions**:
   - Implement **Inline Editing**: Clicking a task title swaps it to an `ImGui::InputText`.
   - Implement **Subtasks**: Render tasks in a tree format using `ImGui::TreeNode`.
   - Implement **Drag-and-Drop**: Use `ImGui::BeginDragDropSource()` and `ImGui::BeginDragDropTarget()` to reorder tasks and nest them as subtasks.
-- [ ] **Desktop Notifications**: Integrate a background thread that periodically checks due dates and triggers OS-level notifications (e.g., via `libnotify` via `system()` on Linux).
+- [x] **Desktop Notifications**: Integrate a background thread that periodically checks due dates and triggers OS-level notifications (e.g., via `libnotify` via `system()` on Linux).
 
 ### Milestone 6: Documentation
 - [ ] **README.md**: Document build instructions for both Linux targets. Include an **Acknowledgements** section explicitly crediting [codad5/google-task-desktop](https://github.com/codad5/google-task-desktop) by author `codad5` as the feature inspiration.
