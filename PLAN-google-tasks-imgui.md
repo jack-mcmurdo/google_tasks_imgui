@@ -57,7 +57,7 @@
 - [x] **Desktop Notifications**: Integrate a background thread that periodically checks due dates and triggers OS-level notifications (e.g., via `libnotify` via `system()` on Linux).
 
 ### Milestone 6: Documentation
-- [ ] **README.md**: Document build instructions for both Linux targets. Include an **Acknowledgements** section explicitly crediting [codad5/google-task-desktop](https://github.com/codad5/google-task-desktop) by author `codad5` as the feature inspiration.
+- [x] **README.md**: Document build instructions for both Linux targets. Include an **Acknowledgements** section explicitly crediting [codad5/google-task-desktop](https://github.com/codad5/google-task-desktop) by author `codad5` as the feature inspiration.
 
 ## Edge cases & risks
 - **ImGui Drag-and-Drop**: Managing the UI state for dragging a task from one part of a tree and nesting it inside another requires careful synchronization with the Google API `parent` hierarchy.
