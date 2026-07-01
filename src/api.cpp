@@ -31,16 +31,23 @@ static Task parse_task(const json& j) {
     return task;
 }
 
-static json task_to_json(const Task& task) {
+// deleted/hidden/completed are output-only in the Google Tasks API, so we never
+// send them. On update we must send notes/due explicitly (even when empty) so
+// that clearing them — e.g. un-starring or removing a due date — actually syncs.
+static json task_to_json(const Task& task, bool for_update = false) {
     json j;
     if (!task.id.empty()) j["id"] = task.id;
-    if (!task.title.empty()) j["title"] = task.title;
-    if (!task.notes.empty()) j["notes"] = task.notes;
+    j["title"] = task.title;
     if (!task.status.empty()) j["status"] = task.status;
-    if (!task.due.empty()) j["due"] = task.due;
-    if (!task.completed.empty()) j["completed"] = task.completed;
-    j["deleted"] = task.deleted;
-    j["hidden"] = task.hidden;
+
+    if (for_update) {
+        j["notes"] = task.notes;
+        if (task.due.empty()) j["due"] = nullptr;
+        else j["due"] = task.due;
+    } else {
+        if (!task.notes.empty()) j["notes"] = task.notes;
+        if (!task.due.empty()) j["due"] = task.due;
+    }
     return j;
 }
 
@@ -211,10 +218,11 @@ std::optional<Task> GoogleTasksAPI::update_task(const std::string& list_id, cons
     httplib::Client cli("https://tasks.googleapis.com");
     cli.set_bearer_token_auth(access_token_);
     
-    json j = task_to_json(task);
+    json j = task_to_json(task, /*for_update=*/true);
     std::string body = j.dump();
-    
-    auto res = cli.Put("/tasks/v1/lists/" + list_id + "/tasks/" + task.id, body, "application/json");
+
+    // PATCH honours partial updates and null-clears, and leaves position/parent untouched.
+    auto res = cli.Patch("/tasks/v1/lists/" + list_id + "/tasks/" + task.id, body, "application/json");
     if (res && res->status == 200) {
         return parse_task(json::parse(res->body));
     }

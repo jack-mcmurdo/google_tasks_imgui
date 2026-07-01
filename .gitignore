@@ -58,7 +58,14 @@ compile_commands.json
 .DS_Store
 Thumbs.db
 
-# OAuth credentials
+# OAuth credentials and token store
 client_secret.json
 token.json
+tokens.json
+
+# ImGui runtime layout state
+imgui.ini
+
+# Local build dir
+build_local/
 

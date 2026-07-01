@@ -9,6 +9,8 @@
 #include <mutex>
 #include <chrono>
 #include <atomic>
+#include <algorithm>
+#include <ctime>
 
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
@@ -18,6 +20,8 @@
 #include "api.h"
 #include "auth.h"
 #include "IconsFontAwesome5.h"
+#include "json.hpp"
+#include <fstream>
 
 // --- Application State ---
 static std::string selected_task_id = "";
@@ -40,33 +44,77 @@ struct AppState {
 };
 
 // --- Desktop Notifications ---
-std::mutex notify_mutex;
-std::vector<API::Task> notified_tasks;
+// The notifier runs on a background thread, so it must never touch the live
+// AppState (which the UI thread mutates). Instead the UI thread publishes a
+// snapshot of the current tasks under `notify_mutex`, and the notifier reads
+// only that snapshot.
+static std::mutex notify_mutex;
+static std::vector<API::Task> notify_snapshot; // guarded by notify_mutex
 
-void NotificationThread(AppState* state) {
+static void PublishNotifySnapshot(const std::vector<API::Task>& tasks) {
+    std::lock_guard<std::mutex> lock(notify_mutex);
+    notify_snapshot = tasks;
+}
+
+// Today's local date as "YYYY-MM-DD". Google Tasks stores `due` as a date at
+// midnight UTC, so a lexicographic compare of the date portion is enough to tell
+// whether a task is due today or overdue.
+static std::string TodayDate() {
+    time_t t = time(nullptr);
+    struct tm tm_local;
+    localtime_r(&t, &tm_local);
+    char buf[11];
+    snprintf(buf, sizeof(buf), "%04d-%02d-%02d",
+             tm_local.tm_year + 1900, tm_local.tm_mon + 1, tm_local.tm_mday);
+    return std::string(buf);
+}
+
+void NotificationThread() {
+    std::vector<std::string> notified_ids;
     while (true) {
         std::this_thread::sleep_for(std::chrono::minutes(1));
-        if (!state->api || state->selected_list_id.empty()) continue;
-        
-        std::lock_guard<std::mutex> lock(notify_mutex);
-        for (const auto& task : state->tasks) {
-            if (task.status != "completed" && !task.due.empty()) {
-                bool already_notified = false;
-                for (const auto& n : notified_tasks) {
-                    if (n.id == task.id) {
-                        already_notified = true;
-                        break;
-                    }
-                }
-                
-                if (!already_notified) {
-                    std::string cmd = "notify-send 'Task Due' '" + task.title + "'";
-                    int ret = system(cmd.c_str());
-                    (void)ret;
-                    notified_tasks.push_back(task);
-                }
-            }
+
+        std::vector<API::Task> tasks;
+        {
+            std::lock_guard<std::mutex> lock(notify_mutex);
+            tasks = notify_snapshot;
         }
+
+        std::string today = TodayDate();
+        for (const auto& task : tasks) {
+            if (task.status == "completed" || task.due.length() < 10) continue;
+
+            // Only notify once the due date has been reached (due today or overdue).
+            std::string due_date = task.due.substr(0, 10);
+            if (due_date > today) continue;
+
+            if (std::find(notified_ids.begin(), notified_ids.end(), task.id) != notified_ids.end()) {
+                continue;
+            }
+            const char* when = (due_date < today) ? "Overdue" : "Due today";
+            std::string cmd = "notify-send '" + std::string(when) + "' '" + task.title + "'";
+            int ret = system(cmd.c_str());
+            (void)ret;
+            notified_ids.push_back(task.id);
+        }
+    }
+}
+
+// Load OAuth client credentials from a Google "client_secret.json" file
+// (the standard Desktop-app download format, with an "installed" or "web" node).
+static bool load_client_secret_file(const std::string& path, std::string& id, std::string& secret) {
+    std::ifstream f(path);
+    if (!f.is_open()) return false;
+    try {
+        nlohmann::json j = nlohmann::json::parse(f);
+        const auto& node = j.contains("installed") ? j["installed"]
+                         : j.contains("web")       ? j["web"]
+                                                   : j;
+        id = node.value("client_id", "");
+        secret = node.value("client_secret", "");
+        return !id.empty() && !secret.empty();
+    } catch (...) {
+        return false;
     }
 }
 
@@ -272,22 +320,14 @@ void RenderTasks(AppState& state) {
             }
             ImGui::SameLine();
             
-            bool is_starred = task->notes.find("[STARRED]") != std::string::npos;
+            bool is_starred = API::task_is_starred(task->notes);
             if (is_starred) {
                 ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.84f, 0.0f, 1.0f)); // Gold/Yellow
             } else {
                 ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.4f, 0.4f, 0.4f, 1.0f)); // Gray
             }
             if (ImGui::Button(ICON_FA_STAR "##star")) {
-                if (is_starred) {
-                    size_t pos = task->notes.find("[STARRED]");
-                    if (pos != std::string::npos) {
-                        task->notes.erase(pos, 9);
-                    }
-                } else {
-                    if (task->notes.empty()) task->notes = "[STARRED]";
-                    else task->notes += "\n[STARRED]";
-                }
+                task->notes = API::set_starred(task->notes, !is_starred);
                 AsyncUpdateTask(state, *task);
             }
             ImGui::PopStyleColor();
@@ -364,49 +404,32 @@ void RenderRightPanel(AppState& state) {
                 AsyncUpdateTask(state, *task);
             }
             
-            bool is_starred = task->notes.find("[STARRED]") != std::string::npos;
+            bool is_starred = API::task_is_starred(task->notes);
             if (is_starred) {
                 ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.84f, 0.0f, 1.0f));
             } else {
                 ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.4f, 0.4f, 0.4f, 1.0f));
             }
             if (ImGui::Button(ICON_FA_STAR " Starred##rp")) {
-                if (is_starred) {
-                    size_t pos = task->notes.find("[STARRED]");
-                    if (pos != std::string::npos) {
-                        task->notes.erase(pos, 9);
-                    }
-                } else {
-                    if (task->notes.empty()) task->notes = "[STARRED]";
-                    else task->notes += "\n[STARRED]";
-                }
+                task->notes = API::set_starred(task->notes, !is_starred);
                 AsyncUpdateTask(state, *task);
             }
             ImGui::PopStyleColor();
-            
-            std::string display_notes = task->notes;
-            size_t pos = display_notes.find("[STARRED]");
-            if (pos != std::string::npos) {
-                display_notes.erase(pos, 9);
-            }
-            
+
+            std::string display_notes = API::strip_starred(task->notes);
+
             char notes_buf[1024];
             strncpy(notes_buf, display_notes.c_str(), sizeof(notes_buf) - 1);
             notes_buf[sizeof(notes_buf) - 1] = '\0';
             if (ImGui::InputTextMultiline("Notes", notes_buf, sizeof(notes_buf), ImVec2(-FLT_MIN, ImGui::GetTextLineHeight() * 8)) || ImGui::IsItemDeactivatedAfterEdit()) {
-                std::string new_notes = notes_buf;
-                if (is_starred) {
-                    if (!new_notes.empty()) new_notes += "\n[STARRED]";
-                    else new_notes = "[STARRED]";
-                }
-                task->notes = new_notes;
+                task->notes = API::set_starred(notes_buf, is_starred);
                 AsyncUpdateTask(state, *task);
             }
-            
+
             std::string due_date = task->due;
             std::string short_due = due_date.length() >= 10 ? due_date.substr(0, 10) : "";
             if (ImGui::DatePicker("Due Date", short_due)) {
-                task->due = short_due + "T00:00:00.000Z";
+                task->due = short_due.empty() ? "" : short_due + "T00:00:00.000Z";
                 AsyncUpdateTask(state, *task);
             }
             
@@ -496,16 +519,25 @@ int main(int argc, char** argv) {
     AppState state;
     state.token_manager.load();
     
-    const char* client_id = std::getenv("GOOGLE_CLIENT_ID");
-    const char* client_secret = std::getenv("GOOGLE_CLIENT_SECRET");
-    if (!client_id) client_id = "492917157691-lap1e9nte0gvq44t2712o9pmgvfvkofb.apps.googleusercontent.com";
-    if (!client_secret) client_secret = "REDACTED";
-    
-    if (client_id && client_secret) {
-        Auth::set_client_credentials(client_id, client_secret);
+    std::string client_id, client_secret;
+    if (const char* e = std::getenv("GOOGLE_CLIENT_ID")) client_id = e;
+    if (const char* e = std::getenv("GOOGLE_CLIENT_SECRET")) client_secret = e;
+    if (client_id.empty() || client_secret.empty()) {
+        load_client_secret_file("client_secret.json", client_id, client_secret) ||
+        load_client_secret_file("../client_secret.json", client_id, client_secret) ||
+        load_client_secret_file("/usr/share/google-tasks-imgui/client_secret.json", client_id, client_secret) ||
+        load_client_secret_file("/usr/local/share/google-tasks-imgui/client_secret.json", client_id, client_secret);
     }
 
-    std::thread notifier(NotificationThread, &state);
+    if (!client_id.empty() && !client_secret.empty()) {
+        Auth::set_client_credentials(client_id, client_secret);
+    } else {
+        std::cerr << "No OAuth credentials found. Set GOOGLE_CLIENT_ID and "
+                     "GOOGLE_CLIENT_SECRET, or place a client_secret.json next to the binary."
+                  << std::endl;
+    }
+
+    std::thread notifier(NotificationThread);
     notifier.detach();
 
     while (!glfwWindowShouldClose(window)) {
@@ -516,6 +548,7 @@ int main(int argc, char** argv) {
                 state.tasks = state.api->get_tasks(state.selected_list_id);
             }
             state.needs_refresh = false;
+            PublishNotifySnapshot(state.tasks);
         }
 
         ImGui_ImplOpenGL3_NewFrame();

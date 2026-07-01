@@ -25,6 +25,33 @@ struct Task {
     std::string position;
 };
 
+// Starred state is stored by appending a "[STARRED]" tag to the notes field so
+// it syncs across devices. These helpers keep the tag handling in one place.
+inline bool task_is_starred(const std::string& notes) {
+    return notes.find("[STARRED]") != std::string::npos;
+}
+
+inline std::string strip_starred(const std::string& notes) {
+    std::string n = notes;
+    size_t pos;
+    while ((pos = n.find("[STARRED]")) != std::string::npos) {
+        size_t start = pos;
+        size_t len = 9; // length of "[STARRED]"
+        // Also consume an adjacent newline so repeated toggles don't accumulate blank lines.
+        if (start > 0 && n[start - 1] == '\n') { start--; len++; }
+        else if (start + 9 < n.size() && n[start + 9] == '\n') { len++; }
+        n.erase(start, len);
+    }
+    return n;
+}
+
+inline std::string set_starred(const std::string& notes, bool starred) {
+    std::string base = strip_starred(notes);
+    if (!starred) return base;
+    if (base.empty()) return "[STARRED]";
+    return base + "\n[STARRED]";
+}
+
 class GoogleTasksAPI {
 public:
     GoogleTasksAPI(const std::string& access_token);
