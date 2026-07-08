@@ -91,6 +91,12 @@ Keep's API has real limitations worth knowing before you rely on it:
 - **No archive/pin/color/labels.** These Keep-app concepts don't exist in the API's
   data model, so they're not supported here.
 
+## Privacy & terms
+
+The app is a pure client for Google's APIs: it has no servers of its own and sends
+no data anywhere except directly to Google. See the
+[Privacy Policy](PRIVACY.md) and [Terms of Service](TERMS.md).
+
 ## Building from source / development
 
 Building, packaging, and OAuth client configuration are developer concerns and live in
