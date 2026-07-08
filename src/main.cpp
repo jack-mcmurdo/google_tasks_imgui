@@ -900,12 +900,13 @@ int main(int argc, char** argv) {
         }
     }
 
-    // client_id is not confidential (visible in every login's browser URL), so it's
-    // safe to hardcode. client_secret IS required by Google's token endpoint for
-    // this Desktop-app client type (PKCE, added in auth.cpp, doesn't remove that
-    // requirement - confirmed empirically) and must never be hardcoded/committed;
-    // it's sourced from an env var or a gitignored file only. See README.
-    std::string client_id = "492917157691-lap1e9nte0gvq44t2712o9pmgvfvkofb.apps.googleusercontent.com";
+    // Neither value is hardcoded: client_secret is a real credential (required by
+    // Google's token endpoint for this Desktop-app client type regardless of PKCE -
+    // confirmed empirically), and client_id, while not confidential itself, is kept
+    // out of source too so nothing here trips secret-scanning or needs updating in
+    // code whenever the OAuth client is rotated. Both come from an env var or a
+    // gitignored file only. See README.
+    std::string client_id;
     std::string client_secret;
     if (const char* e = std::getenv("GOOGLE_CLIENT_ID")) client_id = e;
     if (const char* e = std::getenv("GOOGLE_CLIENT_SECRET")) client_secret = e;
