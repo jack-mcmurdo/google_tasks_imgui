@@ -1,89 +1,55 @@
 # Google Tasks C++ App
 
-A fast, standalone, and feature-rich C++ desktop application using Dear ImGui to manage Google Tasks. It features seamless system-browser OAuth login, advanced task features (subtasks, drag-and-drop), and automated cross-platform release pipelines.
+A fast, standalone C++ desktop application using Dear ImGui to manage Google Tasks —
+with optional Google Keep support for Google Workspace accounts. Features seamless
+system-browser Google login, subtasks, drag-and-drop, and desktop notifications.
 
-## Build Instructions
+## Installation
 
-### Ubuntu / Debian (e.g., Ubuntu 24.04)
+Download the latest package for your distribution from the
+[Releases page](https://github.com/jack-mcmurdo/google_tasks_imgui/releases):
 
-**Dependencies:**
+**Ubuntu / Debian:**
 ```bash
-sudo apt-get update
-sudo apt-get install -y build-essential cmake libglfw3-dev libssl-dev git
+sudo apt install ./google-tasks-imgui-*-Linux.deb
 ```
 
-**Build & Package:**
+**CentOS / RHEL / Fedora:**
 ```bash
-git clone --recursive <your-repo-url>
-cd google-notes-app
-mkdir build && cd build
-cmake ..
-make -j$(nproc)
-cpack -G DEB # To generate a .deb package
-cpack -G TGZ # To generate a standalone tarball
+sudo dnf install ./google-tasks-imgui-*-Linux.rpm
 ```
 
-### CentOS / RHEL (e.g., CentOS Stream 9)
+Then launch `google-tasks-imgui`.
 
-**Dependencies:**
-```bash
-sudo dnf install -y epel-release
-sudo dnf groupinstall -y "Development Tools"
-sudo dnf install -y gcc-c++ cmake glfw-devel openssl-devel rpm-build git
-```
+> A standalone `.tar.gz` is also published. If you use it instead of a package,
+> extract it over `/usr` (`sudo tar -xzf google-tasks-imgui-*-Linux.tar.gz -C /usr
+> --strip-components=1`) so the app can find its fonts and bundled sign-in
+> configuration.
 
-**Build & Package:**
-```bash
-git clone --recursive <your-repo-url>
-cd google-notes-app
-mkdir build && cd build
-cmake ..
-make -j$(nproc)
-cpack -G RPM # To generate an .rpm package
-```
+## Signing in
 
-## OAuth Credentials
+No configuration is needed. On first launch, click **Sign in** — your browser opens
+Google's standard login page, and the app is ready as soon as you approve access.
+Released packages have everything required for login built in.
 
-The app signs in with a Google OAuth 2.0 **Desktop** client using Authorization Code +
-PKCE (RFC 7636) for extra protection against a local process intercepting the login
-redirect. PKCE does **not** remove the need for a `client_secret`, though — Google's
-token endpoint still requires one for this client type; confirmed directly against the
-live API, not just docs.
+> Until the app passes Google's OAuth verification, the consent screen shows an
+> "unverified app" warning and sign-ins are capped at 100 users.
 
-Neither `client_id` nor `client_secret` is hardcoded. `client_secret` is a real credential
-and was never going to be committed. `client_id` isn't actually confidential (it's visible
-in the browser URL on every login), but it's sourced the same way anyway — GitHub's push
-protection flags a hardcoded Google OAuth client ID as a secret regardless of Google's own
-stance, and there's no upside to fighting that scanner over a value with no benefit to
-hardcoding. At startup both are resolved in this order:
+Signing in covers Google Tasks. Google Keep is separate, optional, and
+Workspace-only — see below.
 
-1. `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` environment variables.
-2. `client_secret.json` next to the binary (or one directory up) — the standard file
-   Google Cloud Console lets you download for a Desktop OAuth client.
-3. `client_secret.json` under the install prefix (`/usr/share/google-tasks-imgui/`).
+## Google Keep (Workspace accounts only)
 
-For a shipped package, place `client_secret.json` at the repo root before running CMake —
-it is bundled into the `.deb`/`.rpm`/tarball automatically (it is gitignored, so it never
-lands in source control). In CI, both values are injected from a GitHub Actions
-environment's secrets (`CLIENT_ID`/`CLIENT_SECRET`) right before packaging.
+Google Keep has no public API for personal `@gmail.com` accounts, so the Keep section
+of the app **only works with a Google Workspace account**, and only after a one-time
+setup by your Workspace administrator. Until that's done, the "Keep" sidebar section
+simply shows as unavailable — Tasks is unaffected.
 
-Create your own OAuth client in the
-[Google Cloud Console](https://console.cloud.google.com/apis/credentials) with redirect
-URI `http://127.0.0.1:8080/` if you don't want to reuse the project's.
+### Instructions for your Workspace admin
 
-> Note the unverified consent screen is capped at 100 users until the app passes
-> Google's OAuth verification.
-
-This OAuth flow only covers Google Tasks. Google Keep uses a completely separate,
-additional auth path (a Workspace service account, not the Desktop OAuth client above)
-and **does not work for personal `@gmail.com` accounts at all** — see the next section.
-
-## Enabling Google Keep for Workspace Admins
-
-Google Keep has no public API for personal accounts. The only official access path
-(`keep.googleapis.com`) requires a Google Cloud service account authorized for
-**domain-wide delegation** by your Workspace admin. If this isn't set up, the app's
-"Keep" sidebar section will simply show as unavailable — Tasks is unaffected.
+The following steps are for the **Workspace administrator**, not the app user. They
+are done once per Workspace, in the organization's own Google Cloud Console and Admin
+Console:
 
 1. In Google Cloud Console, select (or create) the project linked to your Workspace,
    and enable the **Google Keep API**.
@@ -94,17 +60,28 @@ Google Keep has no public API for personal accounts. The only official access pa
    Domain-wide delegation**, add the service account's Client ID with scope
    `https://www.googleapis.com/auth/keep`. Do not grant broader scopes than needed.
 4. Distribute the JSON key file to each user's machine out-of-band (not via this app's
-   installer/package), either via the `GOOGLE_APPLICATION_CREDENTIALS` environment
-   variable or a `keep_service_account.json` file next to the app binary (or one
-   directory up).
-5. **Security notes:** this key can act as *any* user in the domain for the Keep scope —
-   restrict its file permissions, never commit it, never include it in a distributed
-   package/installer, and rotate/revoke it (delete the domain-wide delegation entry)
-   immediately if it's ever exposed.
+   installer/package).
 
-Once configured, the app impersonates whichever account is currently signed in for
-Tasks — there is no separate Keep login step. Keep's API also has real limitations
-worth knowing before you rely on it:
+**Security notes for the admin:** this key can act as *any* user in the domain for the
+Keep scope — restrict its file permissions, never commit it to version control, never
+include it in a distributed package/installer, and rotate/revoke it (delete the
+domain-wide delegation entry) immediately if it's ever exposed.
+
+### Instructions for you, the app user
+
+Once your admin gives you the JSON key file, make it visible to the app in one of two
+ways:
+
+- Set the environment variable `GOOGLE_APPLICATION_CREDENTIALS=/path/to/key.json`
+  (most reliable for an installed package), or
+- Save it as `keep_service_account.json` in the directory you launch the app from.
+
+That's all — the app impersonates whichever account is currently signed in for Tasks;
+there is no separate Keep login step.
+
+### Keep API limitations
+
+Keep's API has real limitations worth knowing before you rely on it:
 
 - **No in-place editing.** The Keep API has never supported updating a note's content.
   "Save" on an existing note deletes it and creates a new one (new ID, reset
@@ -113,6 +90,12 @@ worth knowing before you rely on it:
   `notes.delete` — the app asks for confirmation before deleting a note.
 - **No archive/pin/color/labels.** These Keep-app concepts don't exist in the API's
   data model, so they're not supported here.
+
+## Building from source / development
+
+Building, packaging, and OAuth client configuration are developer concerns and live in
+[DEVELOPMENT.md](DEVELOPMENT.md). App users installing a released package never need
+any of it.
 
 ## Acknowledgements
 
