@@ -16,11 +16,12 @@ jobs:
         run: |
           export DEBIAN_FRONTEND=noninteractive
           apt-get update
-          apt-get install -y build-essential cmake libglfw3-dev libssl-dev git
+          apt-get install -y build-essential cmake libglfw3-dev libssl-dev git git-lfs
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
           submodules: recursive
+          lfs: true
       - name: Write OAuth client secret
         run: echo '{"installed":{"client_id":"${{ secrets.CLIENT_ID }}","client_secret":"${{ secrets.CLIENT_SECRET }}"}}' > client_secret.json
       - name: Build and Package
@@ -48,11 +49,12 @@ jobs:
         run: |
           dnf install -y epel-release
           dnf groupinstall -y "Development Tools"
-          dnf install -y gcc-c++ cmake glfw-devel openssl-devel rpm-build git
+          dnf install -y gcc-c++ cmake glfw-devel openssl-devel rpm-build git git-lfs
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
           submodules: recursive
+          lfs: true
       - name: Write OAuth client secret
         run: echo '{"installed":{"client_id":"${{ secrets.CLIENT_ID }}","client_secret":"${{ secrets.CLIENT_SECRET }}"}}' > client_secret.json
       - name: Build and Package

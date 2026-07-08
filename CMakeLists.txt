@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(GoogleTasksImGui VERSION 1.0.0 LANGUAGES CXX C)
+project(GoogleTasksImGui VERSION 1.1.0 LANGUAGES CXX C)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -55,6 +55,14 @@ target_link_libraries(google-tasks-imgui PRIVATE
 # Installation
 install(TARGETS google-tasks-imgui DESTINATION bin)
 install(DIRECTORY assets/fonts DESTINATION share/google-tasks-imgui)
+
+# Desktop integration: launcher entry and hicolor icons
+install(FILES assets/google-tasks-imgui.desktop DESTINATION share/applications)
+foreach(icon_size 64 256 512)
+    install(FILES assets/icons/GN-${icon_size}.png
+        DESTINATION share/icons/hicolor/${icon_size}x${icon_size}/apps
+        RENAME google-tasks-imgui.png)
+endforeach()
 
 # Bundle the OAuth client credentials for zero-config login, if provided.
 # The file is gitignored; supply it locally or inject it in CI before packaging.
