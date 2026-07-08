@@ -50,18 +50,22 @@ redirect. PKCE does **not** remove the need for a `client_secret`, though — Go
 token endpoint still requires one for this client type; confirmed directly against the
 live API, not just docs.
 
-- `client_id` is hardcoded in `src/main.cpp`. It's not confidential (it's visible in the
-  browser URL on every login), so committing it is fine.
-- `client_secret` **is** a real credential and is never hardcoded or committed. At startup
-  it's resolved in this order:
-  1. `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` environment variables.
-  2. `client_secret.json` next to the binary (or one directory up) — the standard file
-     Google Cloud Console lets you download for a Desktop OAuth client.
-  3. `client_secret.json` under the install prefix (`/usr/share/google-tasks-imgui/`).
+Neither `client_id` nor `client_secret` is hardcoded. `client_secret` is a real credential
+and was never going to be committed. `client_id` isn't actually confidential (it's visible
+in the browser URL on every login), but it's sourced the same way anyway — GitHub's push
+protection flags a hardcoded Google OAuth client ID as a secret regardless of Google's own
+stance, and there's no upside to fighting that scanner over a value with no benefit to
+hardcoding. At startup both are resolved in this order:
+
+1. `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` environment variables.
+2. `client_secret.json` next to the binary (or one directory up) — the standard file
+   Google Cloud Console lets you download for a Desktop OAuth client.
+3. `client_secret.json` under the install prefix (`/usr/share/google-tasks-imgui/`).
 
 For a shipped package, place `client_secret.json` at the repo root before running CMake —
 it is bundled into the `.deb`/`.rpm`/tarball automatically (it is gitignored, so it never
-lands in source control). In CI, inject it as a secret before packaging.
+lands in source control). In CI, both values are injected from a GitHub Actions
+environment's secrets (`CLIENT_ID`/`CLIENT_SECRET`) right before packaging.
 
 Create your own OAuth client in the
 [Google Cloud Console](https://console.cloud.google.com/apis/credentials) with redirect
