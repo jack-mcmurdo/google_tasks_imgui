@@ -1,10 +1,10 @@
 [Desktop Entry]
 Type=Application
-Name=Google Notes
+Name=Notes App
 Comment=Manage Google Tasks and Google Keep from your desktop
-Exec=google-tasks-imgui
-Icon=google-tasks-imgui
+Exec=google-notes-app
+Icon=google-notes-app
 Terminal=false
 Categories=Office;ProjectManagement;
 Keywords=tasks;todo;notes;keep;google;
-StartupWMClass=google-tasks-imgui
+StartupWMClass=google-notes-app

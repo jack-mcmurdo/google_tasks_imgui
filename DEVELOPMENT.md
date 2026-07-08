@@ -64,8 +64,8 @@ hardcoding. At startup both are resolved in this order:
 2. `client_secret.json` in the working directory the app is launched from (or one
    directory up, which covers running from `build/`) — the standard file Google Cloud
    Console lets you download for a Desktop OAuth client.
-3. `client_secret.json` under the install prefix (`/usr/share/google-tasks-imgui/`
-   or `/usr/local/share/google-tasks-imgui/`).
+3. `client_secret.json` under the install prefix (`/usr/share/google-notes-app/`
+   or `/usr/local/share/google-notes-app/`).
 
 For a shipped package, place `client_secret.json` at the repo root before running CMake —
 it is bundled into the `.deb`/`.rpm`/tarball automatically (it is gitignored, so it never

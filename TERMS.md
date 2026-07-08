@@ -2,8 +2,8 @@
 
 **Effective date: July 8, 2026**
 
-These terms cover the **Google Notes** desktop application (binary name
-`google-tasks-imgui`, "the app"), published at
+These terms cover the **Notes App** desktop application (binary name
+`google-notes-app`, "the app"), published at
 <https://github.com/jack-mcmurdo/google_tasks_imgui>.
 
 ## License

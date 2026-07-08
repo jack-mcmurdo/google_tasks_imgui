@@ -762,7 +762,17 @@ int main(int argc, char** argv) {
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
 
-    GLFWwindow* window = glfwCreateWindow(1024, 768, "Google Tasks ImGui", nullptr, nullptr);
+    // Must match the .desktop file basename so the window manager pairs the
+    // running window with the installed launcher entry and its icon.
+#ifdef GLFW_X11_CLASS_NAME
+    glfwWindowHintString(GLFW_X11_CLASS_NAME, "google-notes-app");
+    glfwWindowHintString(GLFW_X11_INSTANCE_NAME, "google-notes-app");
+#endif
+#ifdef GLFW_WAYLAND_APP_ID
+    glfwWindowHintString(GLFW_WAYLAND_APP_ID, "google-notes-app");
+#endif
+
+    GLFWwindow* window = glfwCreateWindow(1024, 768, "Notes App", nullptr, nullptr);
     if (!window) {
         std::cerr << "Failed to create GLFW window" << std::endl;
         glfwTerminate();
@@ -847,9 +857,9 @@ int main(int argc, char** argv) {
     } else if (FILE* f = fopen("../assets/fonts/PTSans-Regular.ttf", "r")) {
         fclose(f);
         io.Fonts->AddFontFromFileTTF("../assets/fonts/PTSans-Regular.ttf", 20.0f, &main_font_config);
-    } else if (FILE* f = fopen("/usr/share/google-tasks-imgui/fonts/PTSans-Regular.ttf", "r")) {
+    } else if (FILE* f = fopen("/usr/share/google-notes-app/fonts/PTSans-Regular.ttf", "r")) {
         fclose(f);
-        io.Fonts->AddFontFromFileTTF("/usr/share/google-tasks-imgui/fonts/PTSans-Regular.ttf", 20.0f, &main_font_config);
+        io.Fonts->AddFontFromFileTTF("/usr/share/google-notes-app/fonts/PTSans-Regular.ttf", 20.0f, &main_font_config);
     }
 
     ImFontConfig config;
@@ -864,9 +874,9 @@ int main(int argc, char** argv) {
     } else if (FILE* f = fopen("../assets/fonts/fa-solid-900.ttf", "r")) {
         fclose(f);
         io.Fonts->AddFontFromFileTTF("../assets/fonts/fa-solid-900.ttf", 16.0f, &config, icon_ranges);
-    } else if (FILE* f = fopen("/usr/share/google-tasks-imgui/fonts/fa-solid-900.ttf", "r")) {
+    } else if (FILE* f = fopen("/usr/share/google-notes-app/fonts/fa-solid-900.ttf", "r")) {
         fclose(f);
-        io.Fonts->AddFontFromFileTTF("/usr/share/google-tasks-imgui/fonts/fa-solid-900.ttf", 16.0f, &config, icon_ranges);
+        io.Fonts->AddFontFromFileTTF("/usr/share/google-notes-app/fonts/fa-solid-900.ttf", 16.0f, &config, icon_ranges);
     }
 
     // Separate, smaller font for sidebar section headers ("Accounts", "Lists"),
@@ -878,9 +888,9 @@ int main(int argc, char** argv) {
     } else if (FILE* f = fopen("../assets/fonts/PTSans-Regular.ttf", "r")) {
         fclose(f);
         g_header_font = io.Fonts->AddFontFromFileTTF("../assets/fonts/PTSans-Regular.ttf", 14.0f, &main_font_config);
-    } else if (FILE* f = fopen("/usr/share/google-tasks-imgui/fonts/PTSans-Regular.ttf", "r")) {
+    } else if (FILE* f = fopen("/usr/share/google-notes-app/fonts/PTSans-Regular.ttf", "r")) {
         fclose(f);
-        g_header_font = io.Fonts->AddFontFromFileTTF("/usr/share/google-tasks-imgui/fonts/PTSans-Regular.ttf", 14.0f, &main_font_config);
+        g_header_font = io.Fonts->AddFontFromFileTTF("/usr/share/google-notes-app/fonts/PTSans-Regular.ttf", 14.0f, &main_font_config);
     }
 
     ImGui_ImplGlfw_InitForOpenGL(window, true);
@@ -914,8 +924,8 @@ int main(int argc, char** argv) {
         std::string file_id, file_secret;
         if (load_client_secret_file("client_secret.json", file_id, file_secret) ||
             load_client_secret_file("../client_secret.json", file_id, file_secret) ||
-            load_client_secret_file("/usr/share/google-tasks-imgui/client_secret.json", file_id, file_secret) ||
-            load_client_secret_file("/usr/local/share/google-tasks-imgui/client_secret.json", file_id, file_secret)) {
+            load_client_secret_file("/usr/share/google-notes-app/client_secret.json", file_id, file_secret) ||
+            load_client_secret_file("/usr/local/share/google-notes-app/client_secret.json", file_id, file_secret)) {
             client_id = file_id;
             client_secret = file_secret;
         }

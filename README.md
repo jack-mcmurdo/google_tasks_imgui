@@ -11,18 +11,18 @@ Download the latest package for your distribution from the
 
 **Ubuntu / Debian:**
 ```bash
-sudo apt install ./google-tasks-imgui-*-Linux.deb
+sudo apt install ./google-notes-app-*-Linux.deb
 ```
 
 **CentOS / RHEL / Fedora:**
 ```bash
-sudo dnf install ./google-tasks-imgui-*-Linux.rpm
+sudo dnf install ./google-notes-app-*-Linux.rpm
 ```
 
-Then launch `google-tasks-imgui`.
+Then launch `google-notes-app`.
 
 > A standalone `.tar.gz` is also published. If you use it instead of a package,
-> extract it over `/usr` (`sudo tar -xzf google-tasks-imgui-*-Linux.tar.gz -C /usr
+> extract it over `/usr` (`sudo tar -xzf google-notes-app-*-Linux.tar.gz -C /usr
 > --strip-components=1`) so the app can find its fonts and bundled sign-in
 > configuration.
 
