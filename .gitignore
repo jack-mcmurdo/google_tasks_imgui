@@ -58,7 +58,9 @@ compile_commands.json
 .DS_Store
 Thumbs.db
 
-# OAuth credentials and token store
+# OAuth client secret and per-user token store. client_id is hardcoded in
+# source (not confidential), but client_secret is a real credential - never
+# committed, sourced via GOOGLE_CLIENT_SECRET env var or this gitignored file.
 client_secret.json
 token.json
 tokens.json

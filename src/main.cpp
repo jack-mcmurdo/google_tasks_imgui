@@ -900,21 +900,31 @@ int main(int argc, char** argv) {
         }
     }
 
-    std::string client_id, client_secret;
+    // client_id is not confidential (visible in every login's browser URL), so it's
+    // safe to hardcode. client_secret IS required by Google's token endpoint for
+    // this Desktop-app client type (PKCE, added in auth.cpp, doesn't remove that
+    // requirement - confirmed empirically) and must never be hardcoded/committed;
+    // it's sourced from an env var or a gitignored file only. See README.
+    std::string client_id = "492917157691-lap1e9nte0gvq44t2712o9pmgvfvkofb.apps.googleusercontent.com";
+    std::string client_secret;
     if (const char* e = std::getenv("GOOGLE_CLIENT_ID")) client_id = e;
     if (const char* e = std::getenv("GOOGLE_CLIENT_SECRET")) client_secret = e;
-    if (client_id.empty() || client_secret.empty()) {
-        load_client_secret_file("client_secret.json", client_id, client_secret) ||
-        load_client_secret_file("../client_secret.json", client_id, client_secret) ||
-        load_client_secret_file("/usr/share/google-tasks-imgui/client_secret.json", client_id, client_secret) ||
-        load_client_secret_file("/usr/local/share/google-tasks-imgui/client_secret.json", client_id, client_secret);
+    if (client_secret.empty()) {
+        std::string file_id, file_secret;
+        if (load_client_secret_file("client_secret.json", file_id, file_secret) ||
+            load_client_secret_file("../client_secret.json", file_id, file_secret) ||
+            load_client_secret_file("/usr/share/google-tasks-imgui/client_secret.json", file_id, file_secret) ||
+            load_client_secret_file("/usr/local/share/google-tasks-imgui/client_secret.json", file_id, file_secret)) {
+            client_id = file_id;
+            client_secret = file_secret;
+        }
     }
 
-    if (!client_id.empty() && !client_secret.empty()) {
+    if (!client_secret.empty()) {
         Auth::set_client_credentials(client_id, client_secret);
     } else {
-        std::cerr << "No OAuth credentials found. Set GOOGLE_CLIENT_ID and "
-                     "GOOGLE_CLIENT_SECRET, or place a client_secret.json next to the binary."
+        std::cerr << "No OAuth client secret found. Set GOOGLE_CLIENT_SECRET, or place a "
+                     "client_secret.json next to the binary (see README)."
                   << std::endl;
     }
 

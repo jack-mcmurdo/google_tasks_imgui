@@ -37,7 +37,9 @@ void start_oauth_flow(std::function<void(bool success, std::string error_msg, Ac
 // Refresh token helper (blocking)
 bool refresh_token_sync(Account& acc);
 
-// Global settings
+// Global settings. Google's token endpoint requires client_secret for this
+// Desktop OAuth client type regardless of PKCE (confirmed empirically), so
+// both are still needed - see README for how they're sourced.
 void set_client_credentials(const std::string& client_id, const std::string& client_secret);
 
 } // namespace Auth

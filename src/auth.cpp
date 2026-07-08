@@ -2,6 +2,8 @@
 #define CPPHTTPLIB_OPENSSL_SUPPORT
 #include "httplib.h"
 #include "json.hpp"
+#include <openssl/evp.h>
+#include <openssl/rand.h>
 #include <fstream>
 #include <iostream>
 #include <thread>
@@ -24,6 +26,44 @@ static std::string url_encode(const std::string& value) {
         }
     }
     return escaped;
+}
+
+static std::string base64url_encode(const unsigned char* data, size_t len) {
+    static const char* alphabet =
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    std::string out;
+    int val = 0, valb = -6;
+    for (size_t i = 0; i < len; i++) {
+        val = (val << 8) + data[i];
+        valb += 8;
+        while (valb >= 0) {
+            out.push_back(alphabet[(val >> valb) & 0x3F]);
+            valb -= 6;
+        }
+    }
+    if (valb > -6) out.push_back(alphabet[((val << 8) >> (valb + 8)) & 0x3F]);
+    for (char& c : out) {
+        if (c == '+') c = '-';
+        else if (c == '/') c = '_';
+    }
+    return out; // unpadded, matches base64url-without-padding required by PKCE
+}
+
+// PKCE (RFC 7636): proves to Google that whoever redeems the authorization
+// code is the same process that started the flow, without needing a
+// client_secret. code_verifier must be 43-128 chars from the unreserved
+// base64url set; 32 random bytes -> 43 base64url chars satisfies that.
+static std::string generate_code_verifier() {
+    unsigned char buf[32];
+    RAND_bytes(buf, sizeof(buf));
+    return base64url_encode(buf, sizeof(buf));
+}
+
+static std::string code_challenge_s256(const std::string& verifier) {
+    unsigned char digest[EVP_MAX_MD_SIZE];
+    unsigned int digest_len = 0;
+    EVP_Digest(verifier.data(), verifier.size(), digest, &digest_len, EVP_sha256(), nullptr);
+    return base64url_encode(digest, digest_len);
 }
 
 namespace Auth {
@@ -135,16 +175,21 @@ static Account fetch_user_info(const std::string& access_token) {
 
 void start_oauth_flow(std::function<void(bool success, std::string error_msg, Account acc)> callback) {
     std::thread([callback]() {
-        if (g_client_id.empty()) {
-            callback(false, "Client ID not set", Account{});
+        if (g_client_id.empty() || g_client_secret.empty()) {
+            callback(false, "OAuth client credentials not set", Account{});
             return;
         }
+
+        std::string code_verifier = generate_code_verifier();
+        std::string code_challenge = code_challenge_s256(code_verifier);
 
         std::string auth_request_url = AUTH_URL + "?client_id=" + g_client_id +
             "&redirect_uri=" + url_encode(REDIRECT_URI) +
             "&response_type=code" +
             "&scope=" + url_encode("https://www.googleapis.com/auth/tasks https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile") +
-            "&access_type=offline&prompt=consent";
+            "&access_type=offline&prompt=consent" +
+            "&code_challenge=" + code_challenge +
+            "&code_challenge_method=S256";
 
         open_browser(auth_request_url);
 
@@ -178,6 +223,7 @@ void start_oauth_flow(std::function<void(bool success, std::string error_msg, Ac
                 {"code", auth_code},
                 {"client_id", g_client_id},
                 {"client_secret", g_client_secret},
+                {"code_verifier", code_verifier},
                 {"redirect_uri", REDIRECT_URI},
                 {"grant_type", "authorization_code"}
             };
@@ -209,7 +255,7 @@ void start_oauth_flow(std::function<void(bool success, std::string error_msg, Ac
 }
 
 bool refresh_token_sync(Account& acc) {
-    if (g_client_id.empty() || acc.refresh_token.empty()) return false;
+    if (g_client_id.empty() || g_client_secret.empty() || acc.refresh_token.empty()) return false;
     
     httplib::Client cli("https://oauth2.googleapis.com");
     httplib::Params params{

@@ -44,23 +44,31 @@ cpack -G RPM # To generate an .rpm package
 
 ## OAuth Credentials
 
-The app needs a Google OAuth 2.0 **Desktop** client to sign in. Create one in the
-[Google Cloud Console](https://console.cloud.google.com/apis/credentials) with the
-redirect URI `http://127.0.0.1:8080/`, then download the `client_secret.json`.
+The app signs in with a Google OAuth 2.0 **Desktop** client using Authorization Code +
+PKCE (RFC 7636) for extra protection against a local process intercepting the login
+redirect. PKCE does **not** remove the need for a `client_secret`, though — Google's
+token endpoint still requires one for this client type; confirmed directly against the
+live API, not just docs.
 
-At startup the credentials are resolved in this order:
+- `client_id` is hardcoded in `src/main.cpp`. It's not confidential (it's visible in the
+  browser URL on every login), so committing it is fine.
+- `client_secret` **is** a real credential and is never hardcoded or committed. At startup
+  it's resolved in this order:
+  1. `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` environment variables.
+  2. `client_secret.json` next to the binary (or one directory up) — the standard file
+     Google Cloud Console lets you download for a Desktop OAuth client.
+  3. `client_secret.json` under the install prefix (`/usr/share/google-tasks-imgui/`).
 
-1. `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` environment variables.
-2. `client_secret.json` next to the binary (or one directory up).
-3. `client_secret.json` under the install prefix (`/usr/share/google-tasks-imgui/`).
+For a shipped package, place `client_secret.json` at the repo root before running CMake —
+it is bundled into the `.deb`/`.rpm`/tarball automatically (it is gitignored, so it never
+lands in source control). In CI, inject it as a secret before packaging.
 
-For a shipped package, place `client_secret.json` at the repo root before running
-CMake — it is bundled into the `.deb`/`.rpm`/tarball automatically (it is gitignored,
-so it never lands in source control). In CI, inject it as a secret before packaging.
+Create your own OAuth client in the
+[Google Cloud Console](https://console.cloud.google.com/apis/credentials) with redirect
+URI `http://127.0.0.1:8080/` if you don't want to reuse the project's.
 
-> For a Desktop OAuth client, Google does not treat the client secret as confidential,
-> so bundling it for distribution is expected. Note the unverified consent screen is
-> capped at 100 users until the app passes Google's OAuth verification.
+> Note the unverified consent screen is capped at 100 users until the app passes
+> Google's OAuth verification.
 
 This OAuth flow only covers Google Tasks. Google Keep uses a completely separate,
 additional auth path (a Workspace service account, not the Desktop OAuth client above)
