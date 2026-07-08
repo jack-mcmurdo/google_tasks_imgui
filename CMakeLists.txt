@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(GoogleTasksImGui VERSION 1.1.0 LANGUAGES CXX C)
+project(GoogleTasksImGui VERSION 2.0.0 LANGUAGES CXX C)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -27,10 +27,12 @@ target_include_directories(imgui PUBLIC
 target_compile_definitions(imgui PUBLIC IMGUI_IMPL_OPENGL_LOADER_GL3W)
 
 # Main Executable
-add_executable(google-tasks-imgui 
+add_executable(google-tasks-imgui
     src/main.cpp
     src/auth.cpp
     src/api.cpp
+    src/keep_auth.cpp
+    src/keep_api.cpp
 )
 
 # Include directories

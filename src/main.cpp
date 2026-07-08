@@ -19,6 +19,8 @@
 
 #include "api.h"
 #include "auth.h"
+#include "keep_api.h"
+#include "keep_auth.h"
 #include "IconsFontAwesome5.h"
 #include "json.hpp"
 #include <fstream>
@@ -28,20 +30,43 @@ static std::string selected_task_id = "";
 static bool focus_title_input = false;
 static ImFont* g_header_font = nullptr; // smaller, muted font for sidebar section headers
 
+// Local editing buffers for the currently selected Keep note. The Keep API has
+// no update endpoint, so edits are staged here and only sent (as a
+// delete+recreate) when the user explicitly clicks Save - unlike Tasks, which
+// autosaves on every field blur.
+struct NoteEditState {
+    std::string note_id; // KeepNote::name this buffer was loaded from
+    char title_buf[256] = "";
+    bool is_list = false;
+    char text_buf[2048] = "";
+    struct ItemBuf { char text[256] = ""; bool checked = false; };
+    std::vector<ItemBuf> items;
+};
+static NoteEditState g_note_edit;
+
 struct AppState {
     Auth::TokenManager token_manager{"tokens.json"};
     std::string current_account_id;
     std::shared_ptr<API::GoogleTasksAPI> api;
-    
+
     std::vector<API::TaskList> lists;
     std::string selected_list_id;
-    
+
     std::vector<API::Task> tasks;
-    
+
     bool oauth_in_progress = false;
     std::string oauth_error;
-    
+
     std::atomic<bool> needs_refresh{false};
+
+    // Keep integration (Workspace-only; see README "Enabling Google Keep for
+    // Workspace Admins"). Populated alongside Tasks in SelectAccount, but kept
+    // fully separate: unavailability here must never affect Tasks.
+    std::shared_ptr<API::GoogleKeepAPI> keep_api;
+    std::vector<API::KeepNote> notes;
+    std::string selected_note_id; // note "name", e.g. "notes/xxx"
+    bool keep_available = false;
+    std::string keep_error;
 };
 
 // --- Desktop Notifications ---
@@ -141,6 +166,25 @@ static void SelectAccount(AppState& state, Auth::Account& acc) {
     state.lists = state.api->get_tasklists();
     state.selected_list_id = "";
     state.tasks.clear();
+
+    // Keep uses a completely separate service-account auth path. Most accounts
+    // (personal Gmail, or Workspace accounts without admin delegation) won't
+    // have it configured — that's expected, not an error to surface loudly.
+    state.keep_api.reset();
+    state.notes.clear();
+    state.selected_note_id = "";
+    state.keep_available = false;
+    state.keep_error = "";
+
+    std::string keep_error;
+    std::string keep_token = KeepAuth::get_access_token(acc.email, keep_error);
+    if (!keep_token.empty()) {
+        state.keep_api = std::make_shared<API::GoogleKeepAPI>(keep_token);
+        state.notes = state.keep_api->list_notes();
+        state.keep_available = true;
+    } else {
+        state.keep_error = keep_error;
+    }
 }
 
 // --- UI Rendering ---
@@ -244,6 +288,7 @@ void RenderSidebar(AppState& state, float width) {
             bool selected = (state.selected_list_id == list.id);
             if (ImGui::Selectable((list.title + "##" + list.id).c_str(), selected)) {
                 state.selected_list_id = list.id;
+                state.selected_note_id = "";
                 state.needs_refresh = true;
             }
 
@@ -262,6 +307,59 @@ void RenderSidebar(AppState& state, float width) {
                 ImGui::EndPopup();
             }
             ++it;
+        }
+        ImGui::Unindent();
+    }
+
+    if (state.keep_available && state.keep_api) {
+        ImGui::Separator();
+        SectionHeaderText("Keep");
+        ImGui::Indent();
+
+        if (ImGui::Selectable(ICON_FA_PLUS "  Add Note")) {
+            ImGui::OpenPopup("AddNotePopup");
+        }
+
+        if (ImGui::BeginPopup("AddNotePopup")) {
+            static char new_note_title[128] = "";
+            static bool new_note_is_list = false;
+            ImGui::InputText("Title", new_note_title, sizeof(new_note_title));
+            ImGui::Checkbox("Checklist", &new_note_is_list);
+            if (ImGui::Button("Create")) {
+                API::KeepNote note;
+                note.title = new_note_title;
+                note.is_list = new_note_is_list;
+                auto created = state.keep_api->create_note(note);
+                if (created) {
+                    state.notes = state.keep_api->list_notes();
+                    state.selected_note_id = created->name;
+                    selected_task_id = "";
+                    new_note_title[0] = '\0';
+                    new_note_is_list = false;
+                    ImGui::CloseCurrentPopup();
+                }
+            }
+            ImGui::EndPopup();
+        }
+
+        for (const auto& note : state.notes) {
+            bool selected = (state.selected_note_id == note.name);
+            std::string label = note.title.empty() ? "(untitled)" : note.title;
+            if (ImGui::Selectable((label + "##" + note.name).c_str(), selected)) {
+                state.selected_note_id = note.name;
+                selected_task_id = "";
+            }
+        }
+        ImGui::Unindent();
+    } else if (state.api && !state.keep_error.empty()) {
+        ImGui::Separator();
+        SectionHeaderText("Keep");
+        ImGui::Indent();
+        ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+        ImGui::TextWrapped("Unavailable for this account");
+        ImGui::PopStyleColor();
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("%s\n\nAsk your Workspace admin to enable Keep API domain-wide delegation - see README.", state.keep_error.c_str());
         }
         ImGui::Unindent();
     }
@@ -302,6 +400,7 @@ void RenderTasks(AppState& state, float width) {
             if (created) {
                 state.needs_refresh = true;
                 selected_task_id = created->id;
+                state.selected_note_id = "";
                 focus_title_input = true;
             }
         }
@@ -334,6 +433,7 @@ void RenderTasks(AppState& state, float width) {
             bool is_open = ImGui::TreeNodeEx("##node", flags | ImGuiTreeNodeFlags_SpanFullWidth | ImGuiTreeNodeFlags_AllowOverlap);
             if (ImGui::IsItemClicked()) {
                 selected_task_id = task->id;
+                state.selected_note_id = "";
             }
 
             if (ImGui::BeginDragDropSource()) {
@@ -462,9 +562,129 @@ void RenderTasks(AppState& state, float width) {
 
 #include "imgui_date_picker.h"
 
+// Renders the editor for the currently selected Keep note. Reuses the Task
+// detail pane's conventions (title InputText, multiline body, red delete
+// button) but "Save" builds a brand-new note and deletes the old one, since
+// the Keep API cannot edit a note in place.
+static void RenderNoteDetail(AppState& state, API::KeepNote* note) {
+    if (g_note_edit.note_id != note->name) {
+        g_note_edit = NoteEditState{};
+        g_note_edit.note_id = note->name;
+        strncpy(g_note_edit.title_buf, note->title.c_str(), sizeof(g_note_edit.title_buf) - 1);
+        g_note_edit.is_list = note->is_list;
+        if (note->is_list) {
+            for (const auto& item : note->items) {
+                NoteEditState::ItemBuf ib;
+                strncpy(ib.text, item.text.c_str(), sizeof(ib.text) - 1);
+                ib.checked = item.checked;
+                g_note_edit.items.push_back(ib);
+            }
+        } else {
+            strncpy(g_note_edit.text_buf, note->text.c_str(), sizeof(g_note_edit.text_buf) - 1);
+        }
+    }
+
+    ImGui::TextUnformatted("Title");
+    ImGui::InputText("##NoteTitle", g_note_edit.title_buf, sizeof(g_note_edit.title_buf));
+
+    ImGui::Separator();
+
+    if (g_note_edit.is_list) {
+        ImGui::TextUnformatted("Checklist");
+        for (size_t i = 0; i < g_note_edit.items.size(); ++i) {
+            ImGui::PushID((int)i);
+            ImGui::Checkbox("##checked", &g_note_edit.items[i].checked);
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(-40.0f);
+            ImGui::InputText("##itemtext", g_note_edit.items[i].text, sizeof(g_note_edit.items[i].text));
+            ImGui::SameLine();
+            bool remove = ImGui::Button(ICON_FA_TRASH);
+            ImGui::PopID();
+            if (remove) {
+                g_note_edit.items.erase(g_note_edit.items.begin() + i);
+                break; // vector just shrank; re-render next frame
+            }
+        }
+        if (ImGui::Button(ICON_FA_PLUS " Add Item")) {
+            g_note_edit.items.push_back(NoteEditState::ItemBuf{});
+        }
+    } else {
+        ImGui::TextUnformatted("Text");
+        ImGui::InputTextMultiline("##NoteText", g_note_edit.text_buf, sizeof(g_note_edit.text_buf), ImVec2(-FLT_MIN, ImGui::GetTextLineHeight() * 8));
+    }
+
+    ImGui::Separator();
+    ImGui::TextColored(ImVec4(0.85f, 0.65f, 0.20f, 1.00f), "Saving creates a new note; the old one is deleted.");
+    if (ImGui::Button(ICON_FA_SAVE " Save Note", ImVec2(-FLT_MIN, 0))) {
+        API::KeepNote new_note;
+        new_note.title = g_note_edit.title_buf;
+        new_note.is_list = g_note_edit.is_list;
+        if (new_note.is_list) {
+            for (const auto& ib : g_note_edit.items) {
+                API::KeepNoteItem item;
+                item.text = ib.text;
+                item.checked = ib.checked;
+                new_note.items.push_back(item);
+            }
+        } else {
+            new_note.text = g_note_edit.text_buf;
+        }
+
+        std::string old_name = note->name;
+        // Create first, then delete the old note - if create fails, the
+        // original note (and its data) is left intact rather than lost.
+        auto created = state.keep_api->create_note(new_note);
+        if (created) {
+            state.keep_api->delete_note(old_name);
+            state.notes = state.keep_api->list_notes();
+            state.selected_note_id = created->name;
+        }
+    }
+
+    ImGui::Separator();
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.87f, 0.30f, 0.30f, 1.00f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.93f, 0.38f, 0.38f, 1.00f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.75f, 0.22f, 0.22f, 1.00f));
+    if (ImGui::Button(ICON_FA_TRASH " Delete Note", ImVec2(-FLT_MIN, 0))) {
+        ImGui::OpenPopup("ConfirmDeleteNote");
+    }
+    ImGui::PopStyleColor(3);
+
+    if (ImGui::BeginPopupModal("ConfirmDeleteNote", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::Text("Permanently delete this note?");
+        ImGui::TextDisabled("The Keep API has no trash for notes - this cannot be undone.");
+        if (ImGui::Button("Delete", ImVec2(120, 0))) {
+            if (state.keep_api->delete_note(note->name)) {
+                state.notes = state.keep_api->list_notes();
+                state.selected_note_id = "";
+                g_note_edit = NoteEditState{};
+            }
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel", ImVec2(120, 0))) {
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+}
+
 void RenderRightPanel(AppState& state) {
     ImGui::BeginChild("RightPanel", ImVec2(0, 0), true);
-    if (selected_task_id.empty()) {
+    if (!state.selected_note_id.empty()) {
+        API::KeepNote* note = nullptr;
+        for (auto& n : state.notes) {
+            if (n.name == state.selected_note_id) {
+                note = &n;
+                break;
+            }
+        }
+        if (note) {
+            RenderNoteDetail(state, note);
+        } else {
+            ImGui::Text("Select a note to view details.");
+        }
+    } else if (selected_task_id.empty()) {
         ImGui::Text("Select a task to view details.");
     } else {
         API::Task* task = nullptr;

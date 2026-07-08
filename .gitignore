@@ -63,6 +63,10 @@ client_secret.json
 token.json
 tokens.json
 
+# Keep service-account key - a real credential (can impersonate any user in
+# the domain for the Keep scope), never commit or package this.
+keep_service_account.json
+
 # ImGui runtime layout state
 imgui.ini
 
