@@ -1,8 +1,9 @@
-# Google Tasks C++ App
+# Notes App
 
-A fast, standalone C++ desktop application using Dear ImGui to manage Google Tasks —
-with optional Google Keep support for Google Workspace accounts. Features seamless
-system-browser Google login, subtasks, drag-and-drop, and desktop notifications.
+**Notes App** (`google-notes-app`) is a fast, standalone C++ desktop client for
+Google Tasks — with optional Google Keep support for Google Workspace accounts.
+Built with Dear ImGui. Features seamless system-browser Google login, subtasks,
+drag-and-drop, and desktop notifications.
 
 ## Installation
 
