@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Notes App — a fast desktop client for Google Tasks &amp; Keep</title>
+<meta name="description" content="Notes App is a fast, standalone desktop client for Google Tasks, with optional Google Keep support for Workspace accounts.">
+<link rel="icon" href="assets/favicon.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="index.html">
+      <img src="assets/logo.png" alt="Notes App logo">
+      Notes App
+    </a>
+    <nav class="site-nav">
+      <a href="index.html" aria-current="page">Home</a>
+      <a href="privacy.html">Privacy</a>
+      <a href="terms.html">Terms</a>
+      <a href="https://github.com/jack-mcmurdo/google_tasks_imgui">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="hero">
+    <img src="assets/logo.png" alt="Notes App logo">
+    <div>
+      <h1>Notes App</h1>
+      <p class="lede">A fast, standalone desktop client for Google Tasks.</p>
+    </div>
+  </div>
+
+  <p><strong>Notes App</strong> (<code>google-notes-app</code>) is a fast, standalone C++
+  desktop client for Google Tasks — with optional Google Keep support for Google
+  Workspace accounts. Built with Dear ImGui. Features seamless system-browser Google
+  login, subtasks, drag-and-drop, and desktop notifications.</p>
+
+  <div class="button-row">
+    <a class="button primary" href="https://github.com/jack-mcmurdo/google_tasks_imgui/releases">Download latest release</a>
+    <a class="button secondary" href="https://github.com/jack-mcmurdo/google_tasks_imgui">View source on GitHub</a>
+  </div>
+
+  <ul class="features">
+    <li>Google Tasks: lists, subtasks, drag-and-drop</li>
+    <li>Optional Google Keep support (Workspace accounts)</li>
+    <li>Seamless system-browser Google sign-in</li>
+    <li>Desktop notifications</li>
+    <li>No servers of its own — talks directly to Google's APIs</li>
+    <li>Free and open source, GPLv3</li>
+  </ul>
+
+  <h2>Installation</h2>
+  <p>Download the latest package for your distribution from the
+  <a href="https://github.com/jack-mcmurdo/google_tasks_imgui/releases">Releases page</a>:</p>
+
+  <p><strong>Ubuntu / Debian:</strong></p>
+  <pre><code>sudo apt install ./google-notes-app-*-Linux.deb</code></pre>
+
+  <p><strong>CentOS / RHEL / Fedora:</strong></p>
+  <pre><code>sudo dnf install ./google-notes-app-*-Linux.rpm</code></pre>
+
+  <p>Then launch <code>google-notes-app</code>.</p>
+
+  <blockquote>
+    A standalone <code>.tar.gz</code> is also published. If you use it instead of a
+    package, extract it over <code>/usr</code> (<code>sudo tar -xzf
+    google-notes-app-*-Linux.tar.gz -C /usr --strip-components=1</code>) so the app
+    can find its fonts and bundled sign-in configuration.
+  </blockquote>
+
+  <h2>Signing in</h2>
+  <p>No configuration is needed. On first launch, click <strong>Sign in</strong> — your
+  browser opens Google's standard login page, and the app is ready as soon as you
+  approve access. Released packages have everything required for login built in.</p>
+
+  <blockquote>
+    Until the app passes Google's OAuth verification, the consent screen shows an
+    "unverified app" warning and sign-ins are capped at 100 users.
+  </blockquote>
+
+  <p>Signing in covers Google Tasks. Google Keep is separate, optional, and
+  Workspace-only — see the
+  <a href="https://github.com/jack-mcmurdo/google_tasks_imgui#google-keep-workspace-accounts-only">README</a>
+  for Workspace admin setup instructions.</p>
+
+  <h2>Privacy &amp; terms</h2>
+  <p>The app is a pure client for Google's APIs: it has no servers of its own and sends
+  no data anywhere except directly to Google. See the
+  <a href="privacy.html">Privacy Policy</a> and <a href="terms.html">Terms of
+  Service</a>.</p>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <span>&copy; 2026 Notes App. Free software, licensed GPLv3.</span>
+    <span>
+      <a href="https://github.com/jack-mcmurdo/google_tasks_imgui">GitHub</a> ·
+      <a href="privacy.html">Privacy</a> ·
+      <a href="terms.html">Terms</a>
+    </span>
+  </div>
+</footer>
+</body>
+</html>

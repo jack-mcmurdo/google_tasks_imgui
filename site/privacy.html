@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy Policy — Notes App</title>
+<meta name="description" content="Privacy Policy for the Notes App desktop application.">
+<link rel="icon" href="assets/favicon.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="index.html">
+      <img src="assets/logo.png" alt="Notes App logo">
+      Notes App
+    </a>
+    <nav class="site-nav">
+      <a href="index.html">Home</a>
+      <a href="privacy.html" aria-current="page">Privacy</a>
+      <a href="terms.html">Terms</a>
+      <a href="https://github.com/jack-mcmurdo/google_tasks_imgui">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <h1>Privacy Policy</h1>
+  <p class="effective-date">Effective date: July 8, 2026</p>
+
+  <p>This privacy policy covers the <strong>Notes App</strong> desktop application
+  (binary name <code>google-notes-app</code>, "the app"), published at
+  <a href="https://github.com/jack-mcmurdo/google_tasks_imgui">https://github.com/jack-mcmurdo/google_tasks_imgui</a>.</p>
+
+  <h2>The short version</h2>
+  <p>The app is a standalone desktop client for Google services. It has
+  <strong>no servers of its own</strong>, and it <strong>does not collect, transmit,
+  store, sell, or share any of your data with the developer or with any third
+  party</strong>. All communication happens directly between the app running on your
+  computer and Google's APIs, over an encrypted (TLS) connection. The developer never
+  sees your data and has no way to access it.</p>
+
+  <h2>What data the app accesses, and why</h2>
+  <p>When you sign in with your Google account, the app requests the following OAuth
+  scopes:</p>
+
+  <table>
+    <thead>
+      <tr><th>Scope</th><th>Why it is needed</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>https://www.googleapis.com/auth/tasks</code></td>
+        <td>To read, create, edit, complete, and delete your Google Tasks and task
+        lists — the core purpose of the app.</td>
+      </tr>
+      <tr>
+        <td><code>https://www.googleapis.com/auth/keep</code></td>
+        <td>To read, create, and delete Google Keep notes (optional; only functional
+        for Google Workspace accounts whose administrator has enabled it).</td>
+      </tr>
+      <tr>
+        <td><code>https://www.googleapis.com/auth/userinfo.email</code> and
+        <code>.../userinfo.profile</code></td>
+        <td>To display which Google account is currently signed in inside the app.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p>This data is fetched from Google's APIs, displayed in the app's window, and —
+  when you make changes — written back to Google's APIs. Nothing else is done with
+  it.</p>
+
+  <h2>What is stored on your computer</h2>
+  <ul>
+    <li><strong>OAuth tokens</strong> (<code>tokens.json</code>): after you sign in,
+    the app saves its access and refresh tokens in a local file so you don't have to
+    sign in every time. This file never leaves your machine. Deleting it signs you
+    out.</li>
+    <li><strong>Window/layout settings</strong> (<code>imgui.ini</code>): purely
+    cosmetic UI state.</li>
+  </ul>
+  <p>Your tasks and notes themselves are <strong>not</strong> cached or stored
+  locally; they live in your Google account.</p>
+
+  <h2>What is <em>not</em> collected</h2>
+  <p>The app contains no analytics, telemetry, crash reporting, advertising, or
+  tracking of any kind. It makes no network connections other than to Google's APIs
+  (<code>accounts.google.com</code>, <code>oauth2.googleapis.com</code>,
+  <code>tasks.googleapis.com</code>, <code>keep.googleapis.com</code>, and related
+  Google endpoints).</p>
+
+  <h2>Data sharing</h2>
+  <p>None. No data is shared with the developer or any third party. The only party
+  that processes your data is Google itself, under
+  <a href="https://policies.google.com/privacy">Google's own Privacy Policy</a>.</p>
+
+  <h2>Revoking access</h2>
+  <p>You can revoke the app's access to your Google account at any time at
+  <a href="https://myaccount.google.com/permissions">https://myaccount.google.com/permissions</a>.
+  Additionally, deleting the local <code>tokens.json</code> file removes the stored
+  credentials from your machine.</p>
+
+  <h2>Google API Services User Data Policy</h2>
+  <p>The app's use of information received from Google APIs adheres to the
+  <a href="https://developers.google.com/terms/api-services-user-data-policy">Google
+  API Services User Data Policy</a>, including the Limited Use requirements.
+  Specifically, data obtained through Google APIs is used only to provide the app's
+  user-facing task and note management features, is never transferred to anyone
+  else, and is never used for advertising, credit-worthiness assessment, or training
+  AI/ML models.</p>
+
+  <h2>Changes to this policy</h2>
+  <p>Any changes to this policy will be published in this file in the app's public
+  source repository, where the full change history is visible.</p>
+
+  <h2>Contact</h2>
+  <p>Questions about this policy can be raised by opening an issue at
+  <a href="https://github.com/jack-mcmurdo/google_tasks_imgui/issues">https://github.com/jack-mcmurdo/google_tasks_imgui/issues</a>.</p>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <span>&copy; 2026 Notes App. Free software, licensed GPLv3.</span>
+    <span>
+      <a href="https://github.com/jack-mcmurdo/google_tasks_imgui">GitHub</a> ·
+      <a href="privacy.html">Privacy</a> ·
+      <a href="terms.html">Terms</a>
+    </span>
+  </div>
+</footer>
+</body>
+</html>
